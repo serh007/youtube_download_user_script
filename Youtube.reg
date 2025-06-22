@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\start-youtube]
+@="URL:Start YouTube Server"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\start-youtube\shell]
+@=""
+
+[HKEY_CLASSES_ROOT\start-youtube\shell\open]
+@=""
+
+[HKEY_CLASSES_ROOT\start-youtube\shell\open\command]
+@="\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoExit -File \"C:\\youtube_download_user_script\\start_yuotube_server.ps1\""
