@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         YouTube Download Buttons (Reliable Version)
+// @name         YouTube Download Buttons
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
+// @version      2.2.7
 // @description  Adds download buttons that reliably appear on initial load and navigation.
 // @match        https://www.youtube.com/*
 // @grant        none
@@ -138,11 +138,17 @@
     panel.appendChild(select);
     panel.appendChild(btnDownload);
     panel.appendChild(btnRunServer);
-    container.appendChild(panel);
+    const threeDotMenu = container.querySelector('#menu') || container.querySelector('ytd-menu-renderer');
+    if (threeDotMenu) {
+      container.insertBefore(panel, threeDotMenu);
+    } else {
+      container.appendChild(panel);
+    }
   }
 
   // Головна функція, яка запускає логіку
   function initialize() {
+    
     // Спочатку видаляємо стару панель, якщо вона є
     document.getElementById(PANEL_ID)?.remove();
 
@@ -150,42 +156,169 @@
 
     // Ми на сторінці відео?
     if (window.location.pathname !== "/watch") {
+      
       return; // Якщо ні, нічого не робимо
     }
 
     const videoId = new URLSearchParams(window.location.search).get("v");
-    if (!videoId) return;
-
-    const buttonContainer = document.querySelector(
-      "#top-level-buttons-computed"
-    );
-    if (buttonContainer) {
-      addDownloadPanel(buttonContainer, videoId);
+    if (!videoId) {
+      
       return;
     }
 
-    observer = new MutationObserver(() => {
-      const buttonContainer = document.querySelector(
-        "#top-level-buttons-computed"
-      );
-      if (buttonContainer) {
+    // Спробуємо основні селектори
+    let buttonContainer =
+      document.querySelector("#top-level-buttons-computed") ||
+      document.querySelector("#top-level-buttons") ||
+      document.querySelector("#flexible-item-buttons");
+
+    // Якщо не знайдено, спробуємо меню з трьома крапками
+    if (!buttonContainer) {
+      buttonContainer =
+        document.querySelector(
+          "ytd-menu-renderer #top-level-buttons-computed"
+        ) || document.querySelector("#menu");
+    }
+
+    if (buttonContainer && buttonContainer.id !== "menu") {
+      
+      setTimeout(() => {
         addDownloadPanel(buttonContainer, videoId);
+        // Add observer to re-add panel if removed
+        const toolbarObserver = new MutationObserver(() => {
+          if (!document.getElementById(PANEL_ID)) {
+            
+            addDownloadPanel(buttonContainer, videoId);
+          }
+        });
+        toolbarObserver.observe(buttonContainer, {
+          childList: true,
+          subtree: true,
+        });
+      }, 500);
+      return;
+    } else if (buttonContainer) {
+      
+    } else {
+      
+    }
+
+    observer = new MutationObserver(() => {
+      
+      buttonContainer =
+        document.querySelector("#top-level-buttons-computed") ||
+        document.querySelector("#top-level-buttons") ||
+        document.querySelector("#flexible-item-buttons");
+      if (!buttonContainer) {
+        buttonContainer =
+          document.querySelector(
+            "ytd-menu-renderer #top-level-buttons-computed"
+          ) || document.querySelector("#menu");
+      }
+      if (buttonContainer && buttonContainer.id !== "menu") {
+        
+        setTimeout(() => {
+          addDownloadPanel(buttonContainer, videoId);
+          // Add toolbar observer
+          const toolbarObserver = new MutationObserver(() => {
+            if (!document.getElementById(PANEL_ID)) {
+              
+              addDownloadPanel(buttonContainer, videoId);
+            }
+          });
+          toolbarObserver.observe(buttonContainer, {
+            childList: true,
+            subtree: true,
+          });
+        }, 500);
         observer.disconnect();
         observer = null;
+      } else if (buttonContainer) {
+        
       }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+
+    // Fallback interval check
+    let fallbackAttempts = 0;
+    const fallbackInterval = setInterval(() => {
+      
+      buttonContainer =
+        document.querySelector("#top-level-buttons-computed") ||
+        document.querySelector("#top-level-buttons") ||
+        document.querySelector("#flexible-item-buttons");
+      if (!buttonContainer) {
+        buttonContainer =
+          document.querySelector(
+            "ytd-menu-renderer #top-level-buttons-computed"
+          ) || document.querySelector("#menu");
+      }
+      if (buttonContainer && buttonContainer.id !== "menu") {
+        
+        setTimeout(() => {
+          addDownloadPanel(buttonContainer, videoId);
+          // Add toolbar observer
+          const toolbarObserver = new MutationObserver(() => {
+            if (!document.getElementById(PANEL_ID)) {
+              
+              addDownloadPanel(buttonContainer, videoId);
+            }
+          });
+          toolbarObserver.observe(buttonContainer, {
+            childList: true,
+            subtree: true,
+          });
+        }, 500);
+        if (observer) observer.disconnect();
+        observer = null;
+        clearInterval(fallbackInterval);
+      } else if (buttonContainer) {
+        
+      }
+      fallbackAttempts++;
+      if (fallbackAttempts > 20) {
+        clearInterval(fallbackInterval);
+      }
+    }, 500);
   }
 
   // YouTube використовує подію 'yt-navigate-finish' для переходів між сторінками
   // Це найнадійніший спосіб відстежити зміну відео
-  document.addEventListener("yt-navigate-finish", initialize);
+  document.addEventListener("yt-navigate-finish", () => {
+    
+    initialize();
+  });
 
-  // Також запускаємо функцію одразу, на випадок прямого завантаження сторінки відео
-  // `yt-navigate-finish` може не спрацювати при першому завантаженні
+  window.addEventListener("yt-navigate-start", () => {
+    
+    initialize();
+  });
+
+  window.addEventListener("spfdone", () => {
+    
+    initialize();
+  });
+
+  window.addEventListener("popstate", () => {
+    
+    initialize();
+  });
+
+  let lastUrl = location.href;
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      
+      initialize();
+    }
+  }, 300);
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialize);
+    document.addEventListener("DOMContentLoaded", () => {
+      
+      initialize();
+    });
   } else {
     initialize();
   }
