@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         YouTube Download Buttons
 // @namespace    http://tampermonkey.net/
-// @version      2.2.7
-// @description  Adds download buttons that reliably appear on initial load and navigation.
+// @version      2.3.1
+// @description  Adds download buttons that reliably appear on initial load and navigation without affecting YouTube's UI.
 // @match        https://www.youtube.com/*
 // @grant        none
 // @run-at       document-start
@@ -59,6 +59,12 @@
   // Функція, що створює та додає панель з кнопками
   function addDownloadPanel(container, videoId) {
     if (document.getElementById(PANEL_ID)) return; // Запобігаємо дублюванню
+    
+    // Перевіряємо, чи ми на сторінці відео
+    if (window.location.pathname !== "/watch") return;
+
+    // Додаткова перевірка, чи ми дійсно на сторінці перегляду відео
+    if (!document.querySelector('ytd-watch-flexy')) return;
 
     const panel = document.createElement("div");
     panel.id = PANEL_ID;
@@ -68,6 +74,7 @@
       gap: "8px",
       marginLeft: "8px",
     });
+    
 
     const select = document.createElement("select");
     Object.assign(select.style, {
@@ -81,7 +88,7 @@
       outline: "none",
     });
 
-    ["360", "480", "720", "1080", "1440", "2160"].forEach((q) => {
+    ["144", "240", "360", "480", "720", "1080", "1440", "2160", "4320"].forEach((q) => {
       const option = document.createElement("option");
       option.value = q;
       option.textContent = q + "p";
@@ -138,17 +145,33 @@
     panel.appendChild(select);
     panel.appendChild(btnDownload);
     panel.appendChild(btnRunServer);
-    const threeDotMenu = container.querySelector('#menu') || container.querySelector('ytd-menu-renderer');
-    if (threeDotMenu) {
-      container.insertBefore(panel, threeDotMenu);
+    
+    // Спробуємо знайти батьківський елемент для контейнера кнопок
+    const parentContainer = container.parentElement;
+    
+    if (parentContainer) {
+      console.log("Знайдено батьківський контейнер для кнопок");
+      
+      // Створюємо новий контейнер для нашої панелі
+      const customContainer = document.createElement("div");
+      customContainer.style.display = "flex";
+      customContainer.style.alignItems = "center";
+      customContainer.appendChild(panel);
+      
+      // Додаємо наш контейнер після оригінального контейнера кнопок
+      if (container.nextSibling) {
+        parentContainer.insertBefore(customContainer, container.nextSibling);
+      } else {
+        parentContainer.appendChild(customContainer);
+      }
     } else {
+      console.log("Батьківський контейнер не знайдено, додаємо в оригінальний контейнер");
       container.appendChild(panel);
     }
   }
 
   // Головна функція, яка запускає логіку
   function initialize() {
-    
     // Спочатку видаляємо стару панель, якщо вона є
     document.getElementById(PANEL_ID)?.remove();
 
@@ -156,38 +179,43 @@
 
     // Ми на сторінці відео?
     if (window.location.pathname !== "/watch") {
-      
       return; // Якщо ні, нічого не робимо
+    }
+    
+    // Додаткова перевірка, чи ми дійсно на сторінці перегляду відео
+    if (!document.querySelector('ytd-watch-flexy')) {
+      return; // Якщо елемент сторінки відео не знайдено, виходимо
     }
 
     const videoId = new URLSearchParams(window.location.search).get("v");
     if (!videoId) {
-      
       return;
     }
 
-    // Спробуємо основні селектори
+    // Спробуємо основні селектори, але тільки в контексті сторінки відео
+    const watchPage = document.querySelector('ytd-watch-flexy');
+    if (!watchPage) return;
+    
+    // Шукаємо контейнер кнопок тільки в контексті сторінки відео
     let buttonContainer =
-      document.querySelector("#top-level-buttons-computed") ||
-      document.querySelector("#top-level-buttons") ||
-      document.querySelector("#flexible-item-buttons");
+      watchPage.querySelector("#top-level-buttons-computed") ||
+      watchPage.querySelector("#top-level-buttons") ||
+      watchPage.querySelector("#flexible-item-buttons");
 
     // Якщо не знайдено, спробуємо меню з трьома крапками
     if (!buttonContainer) {
       buttonContainer =
-        document.querySelector(
+        watchPage.querySelector(
           "ytd-menu-renderer #top-level-buttons-computed"
-        ) || document.querySelector("#menu");
+        ) || watchPage.querySelector("#menu");
     }
 
     if (buttonContainer && buttonContainer.id !== "menu") {
-      
       setTimeout(() => {
         addDownloadPanel(buttonContainer, videoId);
         // Add observer to re-add panel if removed
         const toolbarObserver = new MutationObserver(() => {
           if (!document.getElementById(PANEL_ID)) {
-            
             addDownloadPanel(buttonContainer, videoId);
           }
         });
@@ -198,31 +226,36 @@
       }, 500);
       return;
     } else if (buttonContainer) {
-      
+      // Пропускаємо, якщо знайдено тільки меню
     } else {
-      
+      // Нічого не знайдено, продовжуємо спостереження
     }
 
     observer = new MutationObserver(() => {
+      // Перевіряємо, чи ми на сторінці відео
+      if (window.location.pathname !== "/watch" || !document.querySelector('ytd-watch-flexy')) {
+        return;
+      }
+      
+      const watchPage = document.querySelector('ytd-watch-flexy');
+      if (!watchPage) return;
       
       buttonContainer =
-        document.querySelector("#top-level-buttons-computed") ||
-        document.querySelector("#top-level-buttons") ||
-        document.querySelector("#flexible-item-buttons");
+        watchPage.querySelector("#top-level-buttons-computed") ||
+        watchPage.querySelector("#top-level-buttons") ||
+        watchPage.querySelector("#flexible-item-buttons");
       if (!buttonContainer) {
         buttonContainer =
-          document.querySelector(
+          watchPage.querySelector(
             "ytd-menu-renderer #top-level-buttons-computed"
-          ) || document.querySelector("#menu");
+          ) || watchPage.querySelector("#menu");
       }
       if (buttonContainer && buttonContainer.id !== "menu") {
-        
         setTimeout(() => {
           addDownloadPanel(buttonContainer, videoId);
           // Add toolbar observer
           const toolbarObserver = new MutationObserver(() => {
             if (!document.getElementById(PANEL_ID)) {
-              
               addDownloadPanel(buttonContainer, videoId);
             }
           });
@@ -234,7 +267,7 @@
         observer.disconnect();
         observer = null;
       } else if (buttonContainer) {
-        
+        // Пропускаємо, якщо знайдено тільки меню
       }
     });
 
@@ -243,25 +276,35 @@
     // Fallback interval check
     let fallbackAttempts = 0;
     const fallbackInterval = setInterval(() => {
+      // Перевіряємо, чи ми на сторінці відео
+      if (window.location.pathname !== "/watch" || !document.querySelector('ytd-watch-flexy')) {
+        clearInterval(fallbackInterval);
+        return;
+      }
+      
+      const watchPage = document.querySelector('ytd-watch-flexy');
+      if (!watchPage) {
+        fallbackAttempts++;
+        if (fallbackAttempts > 20) clearInterval(fallbackInterval);
+        return;
+      }
       
       buttonContainer =
-        document.querySelector("#top-level-buttons-computed") ||
-        document.querySelector("#top-level-buttons") ||
-        document.querySelector("#flexible-item-buttons");
+        watchPage.querySelector("#top-level-buttons-computed") ||
+        watchPage.querySelector("#top-level-buttons") ||
+        watchPage.querySelector("#flexible-item-buttons");
       if (!buttonContainer) {
         buttonContainer =
-          document.querySelector(
+          watchPage.querySelector(
             "ytd-menu-renderer #top-level-buttons-computed"
-          ) || document.querySelector("#menu");
+          ) || watchPage.querySelector("#menu");
       }
       if (buttonContainer && buttonContainer.id !== "menu") {
-        
         setTimeout(() => {
           addDownloadPanel(buttonContainer, videoId);
           // Add toolbar observer
           const toolbarObserver = new MutationObserver(() => {
             if (!document.getElementById(PANEL_ID)) {
-              
               addDownloadPanel(buttonContainer, videoId);
             }
           });
@@ -274,7 +317,7 @@
         observer = null;
         clearInterval(fallbackInterval);
       } else if (buttonContainer) {
-        
+        // Пропускаємо, якщо знайдено тільки меню
       }
       fallbackAttempts++;
       if (fallbackAttempts > 20) {
@@ -286,22 +329,18 @@
   // YouTube використовує подію 'yt-navigate-finish' для переходів між сторінками
   // Це найнадійніший спосіб відстежити зміну відео
   document.addEventListener("yt-navigate-finish", () => {
-    
     initialize();
   });
 
   window.addEventListener("yt-navigate-start", () => {
-    
     initialize();
   });
 
   window.addEventListener("spfdone", () => {
-    
     initialize();
   });
 
   window.addEventListener("popstate", () => {
-    
     initialize();
   });
 
@@ -309,14 +348,12 @@
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      
       initialize();
     }
   }, 300);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-      
       initialize();
     });
   } else {
